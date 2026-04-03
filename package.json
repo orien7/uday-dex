@@ -1,0 +1,19 @@
+{
+  "name": "project3-simple-dex",
+  "version": "1.0.0",
+  "description": "Constant Product AMM (x*y=k) — Uniswap v2 style DEX",
+  "author": "Uday Kumar BS <uday.kumarbs@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:bsc": "hardhat run scripts/deploy.js --network bscTestnet",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "hh2",
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
