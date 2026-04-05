@@ -1,0 +1,101 @@
+name: CI/CD — SimpleDEX Test · Deploy · Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  test:
+    name: Compile & Test (25 tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile contracts
+        run: npx hardhat compile
+
+      - name: Run 25 tests
+        run: npx hardhat test
+
+  deploy-contracts:
+    name: Deploy to BSC Testnet
+    runs-on: ubuntu-latest
+    needs: test
+    if: false
+    outputs:
+      token_address: ${{ steps.deploy.outputs.token_address }}
+      dex_address: ${{ steps.deploy.outputs.dex_address }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Deploy contracts
+        id: deploy
+        run: |
+          OUTPUT=$(npx hardhat run scripts/deploy.js --network bscTestnet 2>&1)
+          echo "$OUTPUT"
+          TOKEN=$(echo "$OUTPUT" | grep "UDAYToken:" | awk '{print $NF}')
+          DEX=$(echo "$OUTPUT"   | grep "SimpleDEX:" | awk '{print $NF}')
+          echo "token_address=$TOKEN" >> $GITHUB_OUTPUT
+          echo "dex_address=$DEX"     >> $GITHUB_OUTPUT
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+
+      - name: Verify on BscScan
+        run: |
+          npx hardhat verify --network bscTestnet ${{ steps.deploy.outputs.token_address }} ${{ secrets.DEPLOYER_ADDRESS }} || true
+          npx hardhat verify --network bscTestnet ${{ steps.deploy.outputs.dex_address }} ${{ steps.deploy.outputs.token_address }} ${{ secrets.DEPLOYER_ADDRESS }} || true
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          BSCSCAN_API_KEY: ${{ secrets.BSCSCAN_API_KEY }}
+        continue-on-error: true
+
+  deploy-frontend:
+    name: Deploy DEX Frontend
+    runs-on: ubuntu-latest
+    needs: deploy-contracts
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          VITE_TOKEN_ADDRESS: ${{ needs.deploy-contracts.outputs.token_address }}
+          VITE_DEX_ADDRESS: ${{ needs.deploy-contracts.outputs.dex_address }}
+          VITE_RPC_URL: https://data-seed-prebsc-1-s1.binance.org:8545
+
+      - name: Deploy to Vercel
+        working-directory: ./frontend
+        run: vercel --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEX }}
